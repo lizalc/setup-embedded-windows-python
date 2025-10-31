@@ -1,7 +1,7 @@
 {
   "name": "@lizalc/setup-embedded-windows-python",
   "description": "Sets up the embedded version of Python on Windows runners in GitHub Actions.",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "type": "module",
   "private": true,
   "homepage": "https://github.com/lizalc/setup-embedded-windows-python",
