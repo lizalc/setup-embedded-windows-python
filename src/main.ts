@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
 import * as tc from '@actions/tool-cache'
+import * as io from '@actions/io'
 import * as semver from 'semver'
 import { platform } from '@actions/core'
 
@@ -45,6 +46,19 @@ export async function run(): Promise<void> {
       core.info(
         `Python ${version} has been installed and cached at ${toolPath}`
       )
+    }
+
+    for (const ver of tc
+      .findAllVersions('python')
+      .filter((v) => v !== version)) {
+      core.info(`Cleaning cached Python version: ${ver}`)
+      try {
+        await io.rmRF(ver)
+      } catch (err) {
+        core.warning(
+          `Failed to remove Python version at ${ver}: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
     }
 
     core.addPath(toolPath)
