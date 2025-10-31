@@ -13,7 +13,7 @@ jest.unstable_mockModule('@actions/io', () => io)
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
-const { run } = await import('../src/main.js')
+const { toolName, run } = await import('../src/main.js')
 
 describe('main.ts', () => {
   beforeEach(() => {
@@ -25,10 +25,10 @@ describe('main.ts', () => {
     core.getInput.mockImplementation(() => '3.14.0')
 
     // Mock tool-cache functions with default successful behavior.
-    tc.find.mockReturnValue('/path/to/cached/python')
+    tc.find.mockReturnValue(`/path/to/cached/${toolName}`)
     tc.downloadTool.mockResolvedValue('/path/to/downloaded/python.zip')
-    tc.extractZip.mockResolvedValue('/path/to/extracted/python')
-    tc.cacheDir.mockResolvedValue('/path/to/cached/python')
+    tc.extractZip.mockResolvedValue(`/path/to/extracted/${toolName}`)
+    tc.cacheDir.mockResolvedValue(`/path/to/cached/${toolName}`)
     tc.findAllVersions.mockReturnValue([])
 
     // Mock io functions with default successful behavior.
@@ -51,13 +51,13 @@ describe('main.ts', () => {
   })
 
   it('Uses cached Python when available', async () => {
-    tc.find.mockReturnValue('/cached/python/path')
+    tc.find.mockReturnValue(`/cached/${toolName}/path`)
 
     await run()
 
-    expect(tc.find).toHaveBeenCalledWith('python', '3.14.0', 'amd64')
+    expect(tc.find).toHaveBeenCalledWith(toolName, '3.14.0', 'amd64')
     expect(tc.downloadTool).not.toHaveBeenCalled()
-    expect(core.addPath).toHaveBeenCalledWith('/cached/python/path')
+    expect(core.addPath).toHaveBeenCalledWith(`/cached/${toolName}/path`)
   })
 
   it('Downloads and caches Python when not cached (x64)', async () => {
@@ -68,7 +68,7 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(tc.find).toHaveBeenCalledWith('python', '3.14.0', 'amd64')
+    expect(tc.find).toHaveBeenCalledWith(toolName, '3.14.0', 'amd64')
     expect(core.info).toHaveBeenCalledWith(
       'Downloading Python 3.14.0 for amd64 from https://www.python.org/ftp/python/3.14.0/python-3.14.0-embed-amd64.zip'
     )
@@ -78,7 +78,7 @@ describe('main.ts', () => {
     expect(tc.extractZip).toHaveBeenCalledWith('/download/path')
     expect(tc.cacheDir).toHaveBeenCalledWith(
       '/extract/path',
-      'python',
+      toolName,
       '3.14.0',
       'amd64'
     )
@@ -94,13 +94,13 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(tc.find).toHaveBeenCalledWith('python', '3.14.0', 'arm64')
+    expect(tc.find).toHaveBeenCalledWith(toolName, '3.14.0', 'arm64')
     expect(tc.downloadTool).toHaveBeenCalledWith(
       'https://www.python.org/ftp/python/3.14.0/python-3.14.0-embed-arm64.zip'
     )
     expect(tc.cacheDir).toHaveBeenCalledWith(
-      '/path/to/extracted/python',
-      'python',
+      `/path/to/extracted/${toolName}`,
+      toolName,
       '3.14.0',
       'arm64'
     )
@@ -112,13 +112,13 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(tc.find).toHaveBeenCalledWith('python', '3.14.0', 'win32')
+    expect(tc.find).toHaveBeenCalledWith(toolName, '3.14.0', 'win32')
     expect(tc.downloadTool).toHaveBeenCalledWith(
       'https://www.python.org/ftp/python/3.14.0/python-3.14.0-embed-win32.zip'
     )
     expect(tc.cacheDir).toHaveBeenCalledWith(
-      '/path/to/extracted/python',
-      'python',
+      `/path/to/extracted/${toolName}`,
+      toolName,
       '3.14.0',
       'win32'
     )
@@ -134,8 +134,8 @@ describe('main.ts', () => {
       'https://www.python.org/ftp/python/3.12.5/python-3.12.5-embed-amd64.zip'
     )
     expect(tc.cacheDir).toHaveBeenCalledWith(
-      '/path/to/extracted/python',
-      'python',
+      `/path/to/extracted/${toolName}`,
+      toolName,
       '3.12.5',
       'amd64'
     )
@@ -202,12 +202,12 @@ describe('main.ts', () => {
   })
 
   it('Cleans up old Python versions from cache', async () => {
-    tc.find.mockReturnValue('/cached/python/path')
+    tc.find.mockReturnValue(`/cached/${toolName}/path`)
     tc.findAllVersions.mockReturnValue(['3.12.0', '3.13.0', '3.14.0'])
 
     await run()
 
-    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(tc.findAllVersions).toHaveBeenCalledWith(toolName, 'amd64')
     expect(core.info).toHaveBeenCalledWith(
       'Cleaning cached Python version: 3.12.0'
     )
@@ -220,24 +220,24 @@ describe('main.ts', () => {
   })
 
   it('Does not clean up the current Python version', async () => {
-    tc.find.mockReturnValue('/cached/python/path')
+    tc.find.mockReturnValue(`/cached/${toolName}/path`)
     tc.findAllVersions.mockReturnValue(['3.14.0'])
 
     await run()
 
-    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(tc.findAllVersions).toHaveBeenCalledWith(toolName, 'amd64')
     expect(io.rmRF).not.toHaveBeenCalled()
   })
 
   it('Handles cleanup failures gracefully with warnings', async () => {
-    tc.find.mockReturnValue('/cached/python/path')
+    tc.find.mockReturnValue(`/cached/${toolName}/path`)
     tc.findAllVersions.mockReturnValue(['3.12.0', '3.13.0'])
     io.rmRF.mockRejectedValueOnce(new Error('Permission denied'))
     io.rmRF.mockRejectedValueOnce('String error')
 
     await run()
 
-    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(tc.findAllVersions).toHaveBeenCalledWith(toolName, 'amd64')
     expect(io.rmRF).toHaveBeenCalledWith('3.12.0')
     expect(io.rmRF).toHaveBeenCalledWith('3.13.0')
     expect(core.warning).toHaveBeenCalledWith(
@@ -247,7 +247,7 @@ describe('main.ts', () => {
       'Failed to remove Python version at 3.13.0: String error'
     )
     expect(core.setFailed).not.toHaveBeenCalled()
-    expect(core.addPath).toHaveBeenCalledWith('/cached/python/path')
+    expect(core.addPath).toHaveBeenCalledWith(`/cached/${toolName}/path`)
   })
 
   it('Cleans up old versions after downloading new Python', async () => {
@@ -259,7 +259,7 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(tc.findAllVersions).toHaveBeenCalledWith(toolName, 'amd64')
     expect(core.info).toHaveBeenCalledWith(
       'Cleaning cached Python version: 3.11.0'
     )
@@ -272,13 +272,13 @@ describe('main.ts', () => {
   })
 
   it('Continues execution when no old versions exist', async () => {
-    tc.find.mockReturnValue('/cached/python/path')
+    tc.find.mockReturnValue(`/cached/${toolName}/path`)
     tc.findAllVersions.mockReturnValue([])
 
     await run()
 
-    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(tc.findAllVersions).toHaveBeenCalledWith(toolName, 'amd64')
     expect(io.rmRF).not.toHaveBeenCalled()
-    expect(core.addPath).toHaveBeenCalledWith('/cached/python/path')
+    expect(core.addPath).toHaveBeenCalledWith(`/cached/${toolName}/path`)
   })
 })

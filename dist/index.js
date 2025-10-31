@@ -33596,6 +33596,7 @@ function requireSemver () {
 
 var semverExports = requireSemver();
 
+const toolName = 'python-embedded';
 /**
  * The main function for the action.
  *
@@ -33623,15 +33624,15 @@ async function run() {
             return;
         }
         const url = `https://www.python.org/ftp/python/${version}/python-${version}-embed-${arch}.zip`;
-        let toolPath = toolCacheExports.find('python', version, arch);
+        let toolPath = toolCacheExports.find(toolName, version, arch);
         if (!toolPath) {
             coreExports.info(`Downloading Python ${version} for ${arch} from ${url}`);
             const downloadPath = await toolCacheExports.downloadTool(url);
             const extractPath = await toolCacheExports.extractZip(downloadPath);
-            toolPath = await toolCacheExports.cacheDir(extractPath, 'python', version, arch);
+            toolPath = await toolCacheExports.cacheDir(extractPath, toolName, version, arch);
             coreExports.info(`Python ${version} has been installed and cached at ${toolPath}`);
         }
-        for (const ver of toolCacheExports.findAllVersions('python')
+        for (const ver of toolCacheExports.findAllVersions(toolName, arch)
             .filter((v) => v !== version)) {
             coreExports.info(`Cleaning cached Python version: ${ver}`);
             try {
