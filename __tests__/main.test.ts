@@ -4,10 +4,12 @@
 import { jest } from '@jest/globals'
 import * as core from '../__fixtures__/core.js'
 import * as tc from '../__fixtures__/tool-cache.js'
+import * as io from '../__fixtures__/io.js'
 
 // Mocks should be declared before the module being tested is imported.
 jest.unstable_mockModule('@actions/core', () => core)
 jest.unstable_mockModule('@actions/tool-cache', () => tc)
+jest.unstable_mockModule('@actions/io', () => io)
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
@@ -27,6 +29,10 @@ describe('main.ts', () => {
     tc.downloadTool.mockResolvedValue('/path/to/downloaded/python.zip')
     tc.extractZip.mockResolvedValue('/path/to/extracted/python')
     tc.cacheDir.mockResolvedValue('/path/to/cached/python')
+    tc.findAllVersions.mockReturnValue([])
+
+    // Mock io functions with default successful behavior.
+    io.rmRF.mockResolvedValue()
   })
 
   afterEach(() => {
@@ -193,5 +199,86 @@ describe('main.ts', () => {
     // The action should handle non-Error exceptions gracefully
     // but won't call setFailed since it's not an Error instance
     expect(core.setFailed).not.toHaveBeenCalled()
+  })
+
+  it('Cleans up old Python versions from cache', async () => {
+    tc.find.mockReturnValue('/cached/python/path')
+    tc.findAllVersions.mockReturnValue(['3.12.0', '3.13.0', '3.14.0'])
+
+    await run()
+
+    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(core.info).toHaveBeenCalledWith(
+      'Cleaning cached Python version: 3.12.0'
+    )
+    expect(core.info).toHaveBeenCalledWith(
+      'Cleaning cached Python version: 3.13.0'
+    )
+    expect(io.rmRF).toHaveBeenCalledWith('3.12.0')
+    expect(io.rmRF).toHaveBeenCalledWith('3.13.0')
+    expect(io.rmRF).toHaveBeenCalledTimes(2)
+  })
+
+  it('Does not clean up the current Python version', async () => {
+    tc.find.mockReturnValue('/cached/python/path')
+    tc.findAllVersions.mockReturnValue(['3.14.0'])
+
+    await run()
+
+    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(io.rmRF).not.toHaveBeenCalled()
+  })
+
+  it('Handles cleanup failures gracefully with warnings', async () => {
+    tc.find.mockReturnValue('/cached/python/path')
+    tc.findAllVersions.mockReturnValue(['3.12.0', '3.13.0'])
+    io.rmRF.mockRejectedValueOnce(new Error('Permission denied'))
+    io.rmRF.mockRejectedValueOnce('String error')
+
+    await run()
+
+    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(io.rmRF).toHaveBeenCalledWith('3.12.0')
+    expect(io.rmRF).toHaveBeenCalledWith('3.13.0')
+    expect(core.warning).toHaveBeenCalledWith(
+      'Failed to remove Python version at 3.12.0: Permission denied'
+    )
+    expect(core.warning).toHaveBeenCalledWith(
+      'Failed to remove Python version at 3.13.0: String error'
+    )
+    expect(core.setFailed).not.toHaveBeenCalled()
+    expect(core.addPath).toHaveBeenCalledWith('/cached/python/path')
+  })
+
+  it('Cleans up old versions after downloading new Python', async () => {
+    tc.find.mockReturnValue('')
+    tc.findAllVersions.mockReturnValue(['3.11.0', '3.12.0'])
+    tc.downloadTool.mockResolvedValue('/download/path')
+    tc.extractZip.mockResolvedValue('/extract/path')
+    tc.cacheDir.mockResolvedValue('/cached/path')
+
+    await run()
+
+    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(core.info).toHaveBeenCalledWith(
+      'Cleaning cached Python version: 3.11.0'
+    )
+    expect(core.info).toHaveBeenCalledWith(
+      'Cleaning cached Python version: 3.12.0'
+    )
+    expect(io.rmRF).toHaveBeenCalledWith('3.11.0')
+    expect(io.rmRF).toHaveBeenCalledWith('3.12.0')
+    expect(core.addPath).toHaveBeenCalledWith('/cached/path')
+  })
+
+  it('Continues execution when no old versions exist', async () => {
+    tc.find.mockReturnValue('/cached/python/path')
+    tc.findAllVersions.mockReturnValue([])
+
+    await run()
+
+    expect(tc.findAllVersions).toHaveBeenCalledWith('python')
+    expect(io.rmRF).not.toHaveBeenCalled()
+    expect(core.addPath).toHaveBeenCalledWith('/cached/python/path')
   })
 })
