@@ -4,6 +4,8 @@ import * as io from '@actions/io'
 import * as semver from 'semver'
 import { platform } from '@actions/core'
 
+export const toolName: string = 'python-embedded'
+
 /**
  * The main function for the action.
  *
@@ -35,21 +37,20 @@ export async function run(): Promise<void> {
     }
 
     const url: string = `https://www.python.org/ftp/python/${version}/python-${version}-embed-${arch}.zip`
-
-    let toolPath: string = tc.find('python', version, arch)
+    let toolPath: string = tc.find(toolName, version, arch)
 
     if (!toolPath) {
       core.info(`Downloading Python ${version} for ${arch} from ${url}`)
       const downloadPath: string = await tc.downloadTool(url)
       const extractPath: string = await tc.extractZip(downloadPath)
-      toolPath = await tc.cacheDir(extractPath, 'python', version, arch)
+      toolPath = await tc.cacheDir(extractPath, toolName, version, arch)
       core.info(
         `Python ${version} has been installed and cached at ${toolPath}`
       )
     }
 
     for (const ver of tc
-      .findAllVersions('python')
+      .findAllVersions(toolName, arch)
       .filter((v) => v !== version)) {
       core.info(`Cleaning cached Python version: ${ver}`)
       try {
