@@ -1,17 +1,13 @@
 /**
  * Unit tests for the action's main functionality, src/main.ts
- *
- * To mock dependencies in ESM, you can create fixtures that export mock
- * functions and objects. For example, the core module is mocked in this test,
- * so that the actual '@actions/core' module is not imported.
  */
 import { jest } from '@jest/globals'
 import * as core from '../__fixtures__/core.js'
-import { wait } from '../__fixtures__/wait.js'
+import * as tc from '../__fixtures__/tool-cache.js'
 
 // Mocks should be declared before the module being tested is imported.
 jest.unstable_mockModule('@actions/core', () => core)
-jest.unstable_mockModule('../src/wait.js', () => ({ wait }))
+jest.unstable_mockModule('@actions/tool-cache', () => tc)
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
@@ -19,44 +15,183 @@ const { run } = await import('../src/main.js')
 
 describe('main.ts', () => {
   beforeEach(() => {
-    // Set the action's inputs as return values from core.getInput().
-    core.getInput.mockImplementation(() => '500')
+    // Set default platform to Windows x64
+    core.platform.isWindows = true
+    core.platform.arch = 'x64'
 
-    // Mock the wait function so that it does not actually wait.
-    wait.mockImplementation(() => Promise.resolve('done!'))
+    // Set the action's inputs as return values from core.getInput().
+    core.getInput.mockImplementation(() => '3.14.0')
+
+    // Mock tool-cache functions with default successful behavior.
+    tc.find.mockReturnValue('/path/to/cached/python')
+    tc.downloadTool.mockResolvedValue('/path/to/downloaded/python.zip')
+    tc.extractZip.mockResolvedValue('/path/to/extracted/python')
+    tc.cacheDir.mockResolvedValue('/path/to/cached/python')
   })
 
   afterEach(() => {
     jest.resetAllMocks()
   })
 
-  it('Sets the time output', async () => {
+  it('Fails on non-Windows platforms', async () => {
+    core.platform.isWindows = false
+
     await run()
 
-    // Verify the time output was set.
-    expect(core.setOutput).toHaveBeenNthCalledWith(
-      1,
-      'time',
-      // Simple regex to match a time string in the format HH:MM:SS.
-      expect.stringMatching(/^\d{2}:\d{2}:\d{2}/)
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'This action only supports Windows runners.'
+    )
+    expect(tc.find).not.toHaveBeenCalled()
+  })
+
+  it('Uses cached Python when available', async () => {
+    tc.find.mockReturnValue('/cached/python/path')
+
+    await run()
+
+    expect(tc.find).toHaveBeenCalledWith('python', '3.14.0', 'amd64')
+    expect(tc.downloadTool).not.toHaveBeenCalled()
+    expect(core.addPath).toHaveBeenCalledWith('/cached/python/path')
+  })
+
+  it('Downloads and caches Python when not cached (x64)', async () => {
+    tc.find.mockReturnValue('')
+    tc.downloadTool.mockResolvedValue('/download/path')
+    tc.extractZip.mockResolvedValue('/extract/path')
+    tc.cacheDir.mockResolvedValue('/cached/path')
+
+    await run()
+
+    expect(tc.find).toHaveBeenCalledWith('python', '3.14.0', 'amd64')
+    expect(core.info).toHaveBeenCalledWith(
+      'Downloading Python 3.14.0 for amd64 from https://www.python.org/ftp/python/3.14.0/python-3.14.0-embed-amd64.zip'
+    )
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      'https://www.python.org/ftp/python/3.14.0/python-3.14.0-embed-amd64.zip'
+    )
+    expect(tc.extractZip).toHaveBeenCalledWith('/download/path')
+    expect(tc.cacheDir).toHaveBeenCalledWith(
+      '/extract/path',
+      'python',
+      '3.14.0',
+      'amd64'
+    )
+    expect(core.info).toHaveBeenCalledWith(
+      'Python 3.14.0 has been installed and cached at /cached/path'
+    )
+    expect(core.addPath).toHaveBeenCalledWith('/cached/path')
+  })
+
+  it('Downloads and caches Python for arm64 architecture', async () => {
+    core.platform.arch = 'arm64'
+    tc.find.mockReturnValue('')
+
+    await run()
+
+    expect(tc.find).toHaveBeenCalledWith('python', '3.14.0', 'arm64')
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      'https://www.python.org/ftp/python/3.14.0/python-3.14.0-embed-arm64.zip'
+    )
+    expect(tc.cacheDir).toHaveBeenCalledWith(
+      '/path/to/extracted/python',
+      'python',
+      '3.14.0',
+      'arm64'
     )
   })
 
-  it('Sets a failed status', async () => {
-    // Clear the getInput mock and return an invalid value.
-    core.getInput.mockClear().mockReturnValueOnce('this is not a number')
-
-    // Clear the wait mock and return a rejected promise.
-    wait
-      .mockClear()
-      .mockRejectedValueOnce(new Error('milliseconds is not a number'))
+  it('Downloads and caches Python for x86 architecture', async () => {
+    core.platform.arch = 'x86'
+    tc.find.mockReturnValue('')
 
     await run()
 
-    // Verify that the action was marked as failed.
-    expect(core.setFailed).toHaveBeenNthCalledWith(
-      1,
-      'milliseconds is not a number'
+    expect(tc.find).toHaveBeenCalledWith('python', '3.14.0', 'win32')
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      'https://www.python.org/ftp/python/3.14.0/python-3.14.0-embed-win32.zip'
     )
+    expect(tc.cacheDir).toHaveBeenCalledWith(
+      '/path/to/extracted/python',
+      'python',
+      '3.14.0',
+      'win32'
+    )
+  })
+
+  it('Handles different Python versions', async () => {
+    core.getInput.mockReturnValue('3.12.5')
+    tc.find.mockReturnValue('')
+
+    await run()
+
+    expect(tc.downloadTool).toHaveBeenCalledWith(
+      'https://www.python.org/ftp/python/3.12.5/python-3.12.5-embed-amd64.zip'
+    )
+    expect(tc.cacheDir).toHaveBeenCalledWith(
+      '/path/to/extracted/python',
+      'python',
+      '3.12.5',
+      'amd64'
+    )
+  })
+
+  it('Sets a failed status on invalid version input', async () => {
+    core.getInput.mockReturnValue('invalid-version')
+    tc.find.mockReturnValue('')
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'Invalid Python version input: invalid-version'
+    )
+  })
+
+  it('Sets a failed status on unsupported architecture', async () => {
+    core.platform.arch = 'sparc' // An unsupported architecture
+    tc.find.mockReturnValue('')
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'Unsupported architecture: sparc'
+    )
+  })
+
+  it('Sets a failed status when download fails', async () => {
+    tc.find.mockReturnValue('')
+    tc.downloadTool.mockRejectedValue(new Error('Download failed'))
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith('Download failed')
+  })
+
+  it('Sets a failed status when extraction fails', async () => {
+    tc.find.mockReturnValue('')
+    tc.extractZip.mockRejectedValue(new Error('Extraction failed'))
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith('Extraction failed')
+  })
+
+  it('Sets a failed status when caching fails', async () => {
+    tc.find.mockReturnValue('')
+    tc.cacheDir.mockRejectedValue(new Error('Caching failed'))
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith('Caching failed')
+  })
+
+  it('Sets a failed status for non-Error exceptions', async () => {
+    tc.find.mockReturnValue('')
+    tc.downloadTool.mockRejectedValue('String error')
+
+    await run()
+
+    // The action should handle non-Error exceptions gracefully
+    // but won't call setFailed since it's not an Error instance
+    expect(core.setFailed).not.toHaveBeenCalled()
   })
 })

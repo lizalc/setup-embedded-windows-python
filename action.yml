@@ -1,23 +1,17 @@
-name: The name of your action here
-description: Provide a description here
-author: Your name or organization here
+name: Setup Embedded Python for Windows
+description: Sets up the embedded version of Python on Windows runners.
+author: lizalc
 
-# Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: heart
-  color: red
+  icon: download-cloud
+  color: green
 
 # Define your inputs here.
 inputs:
-  milliseconds:
-    description: Your input description here
+  version:
+    description: Python version to use
     required: true
-    default: '1000'
-
-# Define your outputs here.
-outputs:
-  time:
-    description: Your output description here
+    default: '3.14.0'
 
 runs:
   using: node24

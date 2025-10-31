@@ -1,20 +1,21 @@
 {
-  "name": "typescript-action",
-  "description": "GitHub Actions TypeScript template",
-  "version": "0.0.0",
-  "author": "",
+  "name": "@lizalc/setup-embedded-windows-python",
+  "description": "Sets up the embedded version of Python on Windows runners in GitHub Actions.",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
-  "homepage": "https://github.com/actions/typescript-action",
+  "homepage": "https://github.com/lizalc/setup-embedded-windows-python",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/typescript-action.git"
+    "url": "git+https://github.com/lizalc/setup-embedded-windows-python.git"
   },
   "bugs": {
-    "url": "https://github.com/actions/typescript-action/issues"
+    "url": "https://github.com/lizalc/setup-embedded-windows-python/issues"
   },
   "keywords": [
-    "actions"
+    "actions",
+    "python",
+    "windows"
   ],
   "exports": {
     ".": "./dist/index.js"
@@ -29,7 +30,6 @@
     "format:write": "npx prettier --write .",
     "format:check": "npx prettier --check .",
     "lint": "npx eslint .",
-    "local-action": "npx @github/local-action . src/main.ts .env",
     "package": "npx rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
     "package:watch": "npm run package -- --watch",
     "test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
@@ -37,17 +37,19 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.11.1"
+    "@actions/core": "^1.11.1",
+    "@actions/tool-cache": "^2.0.2",
+    "semver": "^7.7.3"
   },
   "devDependencies": {
     "@eslint/compat": "^1.4.1",
-    "@github/local-action": "^6.0.2",
     "@jest/globals": "^30.2.0",
     "@rollup/plugin-commonjs": "^29.0.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.9.2",
+    "@types/semver": "^7.7.1",
     "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.32.1",
     "eslint": "^9.38.0",

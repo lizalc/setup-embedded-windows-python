@@ -1,5 +1,7 @@
 import * as core from '@actions/core'
-import { wait } from './wait.js'
+import * as tc from '@actions/tool-cache'
+import * as semver from 'semver'
+import { platform } from '@actions/core'
 
 /**
  * The main function for the action.
@@ -8,18 +10,44 @@ import { wait } from './wait.js'
  */
 export async function run(): Promise<void> {
   try {
-    const ms: string = core.getInput('milliseconds')
+    if (!platform.isWindows) {
+      core.setFailed('This action only supports Windows runners.')
+      return
+    }
 
-    // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-    core.debug(`Waiting ${ms} milliseconds ...`)
+    const version: string = core.getInput('version')
+    if (!semver.valid(version)) {
+      core.setFailed(`Invalid Python version input: ${version}`)
+      return
+    }
 
-    // Log the current timestamp, wait, then log the new timestamp
-    core.debug(new Date().toTimeString())
-    await wait(parseInt(ms, 10))
-    core.debug(new Date().toTimeString())
+    const archMap: Record<string, string> = {
+      x64: 'amd64',
+      arm64: 'arm64',
+      x86: 'win32'
+    }
 
-    // Set outputs for other workflow steps to use
-    core.setOutput('time', new Date().toTimeString())
+    const arch: string | undefined = archMap[platform.arch]
+    if (!arch) {
+      core.setFailed(`Unsupported architecture: ${platform.arch}`)
+      return
+    }
+
+    const url: string = `https://www.python.org/ftp/python/${version}/python-${version}-embed-${arch}.zip`
+
+    let toolPath: string = tc.find('python', version, arch)
+
+    if (!toolPath) {
+      core.info(`Downloading Python ${version} for ${arch} from ${url}`)
+      const downloadPath: string = await tc.downloadTool(url)
+      const extractPath: string = await tc.extractZip(downloadPath)
+      toolPath = await tc.cacheDir(extractPath, 'python', version, arch)
+      core.info(
+        `Python ${version} has been installed and cached at ${toolPath}`
+      )
+    }
+
+    core.addPath(toolPath)
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message)
